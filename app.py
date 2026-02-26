@@ -1,5 +1,6 @@
 import json
 import os
+import sqlite3
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 import yfinance as yf
 import pandas as pd
@@ -13,7 +14,34 @@ except:
 
 app = Flask(__name__)
 
-STOCKS_FILE = 'stocks.json'
+# --- Vercel Configuration ---
+# Vercel file system is read-only except for /tmp
+# We need to copy the DB to /tmp to make it writable (but data is ephemeral)
+import shutil
+
+DB_FILE = 'stocks.db'
+STOCKS_FILE = 'stocks.json' # Keep for migration
+
+# Check if running on Vercel (or any environment where root is read-only)
+# We can check if we can write to the current directory or just default to /tmp in production
+# Simple check: Is there a 'VERCEL' env var?
+IS_VERCEL = os.environ.get('VERCEL') == '1'
+
+if IS_VERCEL:
+    # Use /tmp for database
+    DB_PATH = os.path.join('/tmp', DB_FILE)
+    CACHE_DIR = os.path.join('/tmp', 'yfinance_cache')
+else:
+    DB_PATH = DB_FILE
+    CACHE_DIR = "yfinance_cache"
+
+# Set yfinance cache path
+try:
+    if not os.path.exists(CACHE_DIR):
+        os.makedirs(CACHE_DIR, exist_ok=True)
+    yf.set_tz_cache_location(CACHE_DIR)
+except:
+    pass
 
 # Initial SET100 list
 INITIAL_STOCKS = [
@@ -29,19 +57,99 @@ INITIAL_STOCKS = [
     "TIDLOR", "TISCO", "TLI", "TOA", "TOP", "TRUE", "TTB", "TU", "VGI", "WHA"
 ]
 
-def load_stocks():
-    if not os.path.exists(STOCKS_FILE):
-        save_stocks(INITIAL_STOCKS)
-        return INITIAL_STOCKS
-    try:
-        with open(STOCKS_FILE, 'r') as f:
-            return json.load(f)
-    except:
-        return INITIAL_STOCKS
+def get_db_connection():
+    # If on Vercel and DB not in /tmp, initialize it (copy from source or create new)
+    if IS_VERCEL and not os.path.exists(DB_PATH):
+        # On Vercel, copy the bundled DB to /tmp
+        if os.path.exists(DB_FILE):
+             shutil.copy2(DB_FILE, DB_PATH)
+        else:
+             # Should not happen if we bundle it, but safe fallback
+             pass
+             
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-def save_stocks(stocks):
-    with open(STOCKS_FILE, 'w') as f:
-        json.dump(stocks, f)
+def init_db():
+    # Only run init if we are creating a fresh DB
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS stocks
+                 (symbol TEXT PRIMARY KEY)''')
+    
+    # Check if empty
+    c.execute('SELECT count(*) FROM stocks')
+    count = c.fetchone()[0]
+    
+    if count == 0:
+        # Migrate from JSON if exists, else use INITIAL_STOCKS
+        initial_data = []
+        if os.path.exists(STOCKS_FILE):
+            try:
+                with open(STOCKS_FILE, 'r') as f:
+                    initial_data = json.load(f)
+            except:
+                initial_data = INITIAL_STOCKS
+        else:
+            initial_data = INITIAL_STOCKS
+            
+        # Bulk insert
+        # Ensure unique
+        unique_stocks = list(set(initial_data))
+        c.executemany('INSERT OR IGNORE INTO stocks (symbol) VALUES (?)', [(s,) for s in unique_stocks])
+        conn.commit()
+        print(f"Initialized DB with {len(unique_stocks)} stocks.")
+        
+    conn.close()
+
+# Initialize DB on startup
+with app.app_context():
+    if IS_VERCEL:
+        if not os.path.exists(DB_PATH):
+             init_db()
+    else:
+        init_db()
+
+def load_stocks():
+    # Helper to get connection based on environment
+    conn = get_db_connection()
+    try:
+        stocks = conn.execute('SELECT symbol FROM stocks ORDER BY symbol').fetchall()
+    except Exception:
+        return []
+    conn.close()
+    return [s['symbol'] for s in stocks]
+
+def add_stock_db(symbol):
+    conn = get_db_connection()
+    try:
+        conn.execute('INSERT OR IGNORE INTO stocks (symbol) VALUES (?)', (symbol,))
+        conn.commit()
+    except:
+        pass
+    finally:
+        conn.close()
+
+def remove_stock_db(symbol):
+    conn = get_db_connection()
+    try:
+        conn.execute('DELETE FROM stocks WHERE symbol = ?', (symbol,))
+        conn.commit()
+    except:
+        pass
+    finally:
+        conn.close()
+
+def clear_all_stocks_db():
+    conn = get_db_connection()
+    try:
+        conn.execute('DELETE FROM stocks')
+        conn.commit()
+    except:
+        pass
+    finally:
+        conn.close()
 
 def get_stock_data(ticker):
     try:
@@ -399,31 +507,21 @@ def add_stock():
         import re
         tickers = re.split(r'[,\s\n]+', raw_input)
         
-        stocks = load_stocks()
-        added_any = False
-        
         for t in tickers:
             clean_ticker = t.upper().strip()
-            if clean_ticker and clean_ticker not in stocks:
-                stocks.append(clean_ticker)
-                added_any = True
-        
-        if added_any:
-            save_stocks(stocks)
+            if clean_ticker:
+                add_stock_db(clean_ticker)
             
     return redirect(url_for('index'))
 
 @app.route('/remove/<ticker>')
 def remove_stock(ticker):
-    stocks = load_stocks()
-    if ticker in stocks:
-        stocks.remove(ticker)
-        save_stocks(stocks)
+    remove_stock_db(ticker)
     return redirect(url_for('index'))
 
 @app.route('/clear_all', methods=['POST'])
 def clear_all_stocks():
-    save_stocks([])
+    clear_all_stocks_db()
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
