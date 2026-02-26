@@ -386,7 +386,7 @@ def api_data():
     results = []
     
     # Use ThreadPool for faster fetching
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=30) as executor:
         results = list(executor.map(get_stock_data, stocks))
         
     return jsonify(results)
