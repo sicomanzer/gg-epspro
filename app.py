@@ -13,7 +13,7 @@ except:
 
 app = Flask(__name__)
 
-STOCKS_FILE = os.environ.get('STOCKS_FILE_PATH', 'stocks.json')
+STOCKS_FILE = 'stocks.json'
 
 # Initial SET100 list
 INITIAL_STOCKS = [
@@ -40,9 +40,6 @@ def load_stocks():
         return INITIAL_STOCKS
 
 def save_stocks(stocks):
-    dirpath = os.path.dirname(STOCKS_FILE)
-    if dirpath:
-        os.makedirs(dirpath, exist_ok=True)
     with open(STOCKS_FILE, 'w') as f:
         json.dump(stocks, f)
 

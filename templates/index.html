@@ -237,25 +237,6 @@
 
     <script>
         $(document).ready(function() {
-            function __resolveApiBase() {
-                try {
-                    var u = new URL(location.href);
-                    var qp = u.searchParams.get('api') || u.searchParams.get('api_base');
-                    if (qp) { 
-                        try { localStorage.setItem('API_BASE', qp); } catch(e){}
-                        window.API_BASE = qp; 
-                    }
-                } catch (e) {}
-                var v = (window.API_BASE && typeof window.API_BASE === 'string') ? window.API_BASE : '';
-                if (!v) {
-                    try { v = localStorage.getItem('API_BASE') || ''; } catch(e){ v = ''; }
-                    if (v) window.API_BASE = v;
-                }
-                return v ? v.replace(/\/+$/,'') : '';
-            }
-            const API_BASE = __resolveApiBase();
-            const ON_VERCEL = typeof location !== 'undefined' && /\.vercel\.app$/i.test(location.hostname);
-
             var table = $('#stockTable').DataTable({
                 "pageLength": 50,
                 "lengthMenu": [[25, 50, 100, -1], [25, 50, 100, "All"]],
@@ -321,7 +302,7 @@
                 $('#refreshBtn').prop('disabled', true);
                 
                 $.ajax({
-                    url: API_BASE ? (API_BASE + '/api/data') : '/api/data',
+                    url: '/api/data',
                     method: 'GET',
                     success: function(data) {
                         stocksData = data; // Cache data
@@ -379,115 +360,6 @@
                     }
                 });
             }
-
-            // Intercept Add Stock form when using external API base
-            const $addForm = $('form[action="/add"][method="POST"]');
-            if ($addForm.length) {
-                $addForm.on('submit', async function(e) {
-                    if (!API_BASE) {
-                        // Same-origin backend (e.g., Render) → allow normal POST
-                        // Vercel static site (no backend) → prevent and warn
-                        if (ON_VERCEL) {
-                            e.preventDefault();
-                            alert('ไม่พบปลายทาง API สำหรับเพิ่มหุ้น\nโปรดตั้งค่า window.API_BASE ให้ชี้ไปยังโดเมนแบ็กเอนด์');
-                        }
-                        return;
-                    }
-                    e.preventDefault();
-                    const form = this;
-                    try {
-                        const resp = await fetch(API_BASE + '/add', {
-                            method: 'POST',
-                            body: new FormData(form),
-                            credentials: 'include'
-                        });
-                        if (!resp.ok) {
-                            alert('เพิ่มหุ้นไม่สำเร็จ (' + resp.status + ')');
-                            return;
-                        }
-                        // Close modal if open
-                        const modalEl = document.getElementById('settingsModal');
-                        if (modalEl) {
-                            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-                            modal.hide();
-                        }
-                        $('#tickerInput').val('');
-                        loadData();
-                    } catch (err) {
-                        alert('เพิ่มหุ้นไม่สำเร็จ');
-                    }
-                });
-            }
-
-            // Intercept Clear All form for external API
-            const $clearForm = $('form[action="/clear_all"][method="POST"]');
-            if ($clearForm.length) {
-                $clearForm.on('submit', async function(e) {
-                    if (!API_BASE) {
-                        // Same-origin backend (e.g., Render) → allow normal POST
-                        // Vercel static site (no backend) → prevent and warn
-                        if (ON_VERCEL) {
-                            e.preventDefault();
-                            alert('ไม่พบปลายทาง API สำหรับลบรายชื่อทั้งหมด\nโปรดตั้งค่า window.API_BASE ให้ชี้ไปยังโดเมนแบ็กเอนด์');
-                            return;
-                        }
-                        return;
-                    }
-                    // respect existing confirm via onsubmit attribute; since we're hijacking, show again
-                    if (!confirm('คุณแน่ใจหรือไม่ที่จะลบรายชื่อหุ้นทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้')) {
-                        e.preventDefault();
-                        return;
-                    }
-                    e.preventDefault();
-                    try {
-                        const resp = await fetch(API_BASE + '/clear_all', {
-                            method: 'POST',
-                            credentials: 'include'
-                        });
-                        if (!resp.ok) {
-                            alert('ลบรายชื่อหุ้นทั้งหมดไม่สำเร็จ (' + resp.status + ')');
-                            return;
-                        }
-                        // Close modal and reload
-                        const modalEl = document.getElementById('settingsModal');
-                        if (modalEl) {
-                            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-                            modal.hide();
-                        }
-                        loadData();
-                    } catch (err) {
-                        alert('ลบรายชื่อหุ้นทั้งหมดไม่สำเร็จ');
-                    }
-                });
-            }
-
-            // Delegate remove action for external API
-            $('#stockTable').on('click', 'a[href^="/remove/"]', async function(e) {
-                if (!API_BASE) {
-                    // Same-origin backend (e.g., Render) → allow default navigation
-                    // Vercel static site (no backend) → prevent and warn
-                    if (ON_VERCEL) {
-                        e.preventDefault();
-                        alert('คำสั่งลบหุ้นต้องเรียกผ่านแบ็กเอนด์\nโปรดตั้งค่า window.API_BASE ให้ชี้ไปยังโดเมนแบ็กเอนด์');
-                        return;
-                    }
-                    return;
-                }
-                e.preventDefault();
-                const href = $(this).attr('href'); // /remove/SYMBOL
-                if (!href) return;
-                if (!confirm('คุณแน่ใจหรือไม่ที่จะลบหุ้นตัวนี้?')) return;
-                try {
-                    const resp = await fetch(API_BASE + href, { method: 'GET', credentials: 'include' });
-                    if (!resp.ok) {
-                        alert('ลบหุ้นไม่สำเร็จ (' + resp.status + ')');
-                        return;
-                    }
-                    loadData();
-                } catch (err) {
-                    alert('ลบหุ้นไม่สำเร็จ');
-                }
-            });
 
             var epsChart = null;
             var divChart = null;
@@ -1049,7 +921,7 @@
                 else if (grade === "C") scoreColor = "warning";
                 
                 let scoreDetails = stock.score_details ? stock.score_details.join("\n") : "";
-                let scoreHtml = `<span class="badge bg-${scoreColor}" title="${scoreDetails}" style="cursor:help; font-size:0.9rem;">${score}/9 (${grade})</span>`;
+                let scoreHtml = `<span class="badge bg-${scoreColor}" title="${scoreDetails}" style="cursor:help; font-size:0.9rem;">${score}/7 (${grade})</span>`;
 
                 let epsTrendChart = "";
                 if (stock.eps_trend && stock.eps_trend.length > 0) {
