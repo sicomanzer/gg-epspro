@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>โปรแกรมวิเคราะห์และคัดกรองหุ้น</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Noto Sans Thai', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .container { margin-top: 30px; max-width: 1400px; }
+        .card-summary { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s; }
+        .card-summary:hover { transform: translateY(-5px); }
+        .card-icon { font-size: 2rem; opacity: 0.8; }
+        .table-container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .bar-chart { display: flex; align-items: flex-end; justify-content: flex-end; height: 30px; gap: 2px; }
+        .bar { width: 6px; background-color: #adb5bd; transition: all 0.3s; }
+        .bar.max { background-color: #198754; }
+        .bar:hover { opacity: 0.8; transform: scaleY(1.1); }
+        .loading { text-align: center; margin: 20px; display: none; }
+        .text-success-custom { color: #198754; font-weight: 600; }
+        .text-danger-custom { color: #dc3545; font-weight: 600; }
+        h1 { font-weight: 700; color: #2c3e50; }
+        .stock-link { cursor: pointer; color: #0d6efd; text-decoration: none; font-weight: bold; }
+        .stock-link:hover { text-decoration: underline; color: #0a58ca; }
+        .modal-header { background-color: #f8f9fa; border-bottom: 1px solid #dee2e6; }
+        .detail-label { font-weight: 600; color: #6c757d; font-size: 0.9rem; }
+        .detail-value { font-weight: 700; color: #212529; font-size: 1.1rem; }
+        .filter-input::placeholder { color: #adb5bd !important; opacity: 0.5; }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-graph-up-arrow"></i> โปรแกรมคัดกรองหุ้น Pro</h1>
+                <p class="text-muted">วิเคราะห์ข้อมูลหุ้น SET100 และหุ้นที่สนใจแบบ Real-time</p>
+            </div>
+            <button type="button" class="btn btn-secondary text-white" data-bs-toggle="modal" data-bs-target="#settingsModal">
+                <i class="bi bi-gear-fill"></i> ตั้งค่า
+            </button>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="row mb-4" id="summary-section" style="display:none;">
+            <!-- ... existing summary cards ... -->
+        </div>
+
+        <!-- Advanced Filter Section -->
+        <div class="card mb-4 p-2 bg-light border-0 shadow-sm">
+            <div class="d-flex flex-nowrap align-items-center gap-2 w-100 overflow-auto">
+                <div class="col-auto" id="filter-search-container">
+                    <!-- Search box will be moved here -->
+                </div>
+                <span class="small fw-bold text-secondary me-2 text-nowrap"><i class="bi bi-funnel"></i> Filter:</span>
+                
+                <div class="d-flex align-items-center flex-grow-1">
+                    <label class="me-1 small fw-bold text-nowrap">P/E <</label>
+                    <input type="number" id="filter-pe" class="form-control form-control-sm p-1 text-center w-100 filter-input" placeholder="15">
+                </div>
+                
+                <div class="d-flex align-items-center flex-grow-1">
+                    <label class="me-1 small fw-bold text-nowrap">P/BV <</label>
+                    <input type="number" id="filter-pbv" class="form-control form-control-sm p-1 text-center w-100 filter-input" placeholder="1.5">
+                </div>
+                
+                <div class="d-flex align-items-center flex-grow-1">
+                    <label class="me-1 small fw-bold text-nowrap">D/E <</label>
+                    <input type="number" id="filter-de" class="form-control form-control-sm p-1 text-center w-100 filter-input" placeholder="1">
+                </div>
+                
+                <div class="d-flex align-items-center flex-grow-1">
+                    <label class="me-1 small fw-bold text-nowrap">ROA ></label>
+                    <input type="number" id="filter-roa" class="form-control form-control-sm p-1 text-center w-100 filter-input" placeholder="5">
+                </div>
+                
+                <div class="d-flex align-items-center flex-grow-1">
+                    <label class="me-1 small fw-bold text-nowrap">ROE ></label>
+                    <input type="number" id="filter-roe" class="form-control form-control-sm p-1 text-center w-100 filter-input" placeholder="10">
+                </div>
+                
+                <div class="d-flex align-items-center flex-grow-1">
+                    <label class="me-1 small fw-bold text-nowrap">Yield% ></label>
+                    <input type="number" id="filter-yield" class="form-control form-control-sm p-1 text-center w-100 filter-input" placeholder="4">
+                </div>
+                
+                <div class="d-flex align-items-center flex-grow-1">
+                    <label class="me-1 small fw-bold text-nowrap">MCap(M) ></label>
+                    <input type="number" id="filter-mcap" class="form-control form-control-sm p-1 text-center w-100 filter-input" placeholder="1000">
+                </div>
+                
+                <button id="applyAdvancedFilter" class="btn btn-primary btn-sm py-0 px-3 ms-1 text-nowrap" title="คัดกรอง"><i class="bi bi-search"></i> ค้นหา</button>
+                <button id="resetAdvancedFilter" class="btn btn-secondary btn-sm py-0 px-2" title="ล้างค่า"><i class="bi bi-x-circle"></i></button>
+            </div>
+        </div>
+        
+        <div class="card table-container mb-4">
+            
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                 <button id="filterGrowthBtn" class="btn btn-primary shadow-sm"><i class="bi bi-graph-up"></i> คัดกรองหุ้นเติบโต</button>
+                 <button id="filterDivGrowthBtn" class="btn btn-info shadow-sm text-white"><i class="bi bi-piggy-bank"></i> คัดหุ้นปันผลเติบโต (10Y)</button>
+                 <button id="filterUndervaluedBtn" class="btn btn-warning shadow-sm"><i class="bi bi-currency-dollar"></i> คัดราคา < DDM</button>
+                 <button id="filterGradeABtn" class="btn btn-success shadow-sm" title="คัดหุ้นเกรด A (Score >= 6)"><i class="bi bi-star-fill"></i> คัดหุ้นเกรด A (Guru)</button>
+                 <button id="filterSniperBtn" class="btn btn-danger shadow-sm" title="Score A + MOS > 10% + RSI < 50"><i class="bi bi-crosshair"></i> Sniper Mode (Superhuman)</button>
+            </div>
+
+            <div id="loading" class="loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">กำลังโหลด...</span>
+                </div>
+                <p class="mt-2 text-muted">กำลังดึงข้อมูลการเงินล่าสุด...</p>
+            </div>
+
+            <div class="table-responsive">
+                <table id="stockTable" class="table table-hover align-middle" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>ชื่อหุ้น</th>
+                            <th>แนวโน้มกำไร (5ปี)</th>
+                            <th>แนวโน้มปันผล (10ปี)</th>
+                            <th>ราคา (บาท)</th>
+                            <th>P/E (ปัจจุบัน)</th>
+                            <th>P/E (คาดการณ์)</th>
+                            <th>P/BV</th>
+                            <th>D/E</th>
+                            <th>ROA (%)</th>
+                            <th>ROE (%)</th>
+                            <th>มูลค่าตลาด (พันล้าน)</th>
+                            <th>ปันผล (%)</th>
+                            <th>ปันผล (บาท)</th>
+                            <th>DDM (บาท)</th>
+                            <th>Target</th>
+                            <th>RSI (14d)</th>
+                            <th>MOS (%)</th>
+                            <th>Beta</th>
+                            <th>52W สูงสุด</th>
+                            <th>52W ต่ำสุด</th>
+                            <th>BVPS</th>
+                            <th>รายได้โต (%)</th>
+                            <th>กำไรโต (%)</th>
+                            <th>Score</th>
+                            <th>จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Data will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stock Detail Modal -->
+    <div class="modal fade" id="stockModal" tabindex="-1" aria-labelledby="stockModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="stockModalLabel">ข้อมูลหุ้นรายตัว</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h2 id="modal-symbol" class="fw-bold text-primary"></h2>
+                            <p id="modal-name" class="text-muted"></p>
+                            <span id="modal-sector" class="badge bg-secondary"></span>
+                            <span id="modal-industry" class="badge bg-info text-dark"></span>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <h3 id="modal-price" class="fw-bold"></h3>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h5 class="border-bottom pb-2 mb-3">แนวโน้มกำไรต่อหุ้น (EPS) 5 ปี</h5>
+                            <canvas id="epsChart"></canvas>
+                        </div>
+                        <div class="col-md-6">
+                            <h5 class="border-bottom pb-2 mb-3">แนวโน้มเงินปันผล (Dividend) 10 ปี</h5>
+                            <canvas id="divChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <h5 class="border-bottom pb-2 mb-3">อัตราส่วนทางการเงินที่สำคัญ</h5>
+                    <div class="row g-3" id="financial-ratios">
+                        <!-- Filled by JS -->
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h5 class="border-bottom pb-2 mb-2">ลักษณะธุรกิจ</h5>
+                        <p id="modal-desc" class="small text-muted" style="max-height: 150px; overflow-y: auto;"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="settingsModalLabel"><i class="bi bi-gear-fill"></i> ตั้งค่า</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <h6 class="mb-3 border-bottom pb-2">จัดการรายชื่อหุ้น</h6>
+                    <form action="/add" method="POST" class="mb-4">
+                        <div class="mb-2">
+                            <label for="tickerInput" class="form-label text-muted small">เพิ่มหุ้น (บรรทัดละ 1 ชื่อ หรือคั่นด้วยเครื่องหมายจุลภาค ,)</label>
+                            <textarea name="ticker" id="tickerInput" class="form-control" rows="5" placeholder="AAV&#10;ADVANC&#10;AEONTS&#10;AMATA&#10;AOT" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary text-nowrap w-100"><i class="bi bi-plus-circle"></i> เพิ่มหุ้น</button>
+                    </form>
+                    
+                    <form action="/clear_all" method="POST" class="mb-4" onsubmit="return confirm('คุณแน่ใจหรือไม่ที่จะลบรายชื่อหุ้นทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้');">
+                        <button type="submit" class="btn btn-outline-danger w-100"><i class="bi bi-trash"></i> ลบรายชื่อหุ้นทั้งหมด</button>
+                    </form>
+
+                    <h6 class="mb-3 border-bottom pb-2">จัดการข้อมูล</h6>
+                    <button id="refreshBtn" class="btn btn-success shadow-sm w-100"><i class="bi bi-arrow-clockwise"></i> อัปเดตข้อมูลล่าสุด</button>
+                    <p class="text-muted small mt-2">การอัปเดตข้อมูลอาจใช้เวลาสักครู่ ขึ้นอยู่กับจำนวนหุ้นในรายการ</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+    <script>
+        $(document).ready(function() {
+            function __resolveApiBase() {
+                try {
+                    var u = new URL(location.href);
+                    var qp = u.searchParams.get('api') || u.searchParams.get('api_base');
+                    if (qp) { 
+                        try { localStorage.setItem('API_BASE', qp); } catch(e){}
+                        window.API_BASE = qp; 
+                    }
+                } catch (e) {}
+                var v = (window.API_BASE && typeof window.API_BASE === 'string') ? window.API_BASE : '';
+                if (!v) {
+                    try { v = localStorage.getItem('API_BASE') || ''; } catch(e){ v = ''; }
+                    if (v) window.API_BASE = v;
+                }
+                return v ? v.replace(/\/+$/,'') : '';
+            }
+            const API_BASE = __resolveApiBase();
+            const ON_VERCEL = typeof location !== 'undefined' && /\.vercel\.app$/i.test(location.hostname);
+
+            var table = $('#stockTable').DataTable({
+                "pageLength": 50,
+                "lengthMenu": [[25, 50, 100, -1], [25, 50, 100, "All"]],
+                "order": [[ 0, "asc" ]], // Default sort by index
+                "dom": "<'row'<'col-sm-12 col-md-6'f>>" +
+                       "<'row'<'col-sm-12'tr>>" +
+                       "<'row align-items-center'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7 d-flex justify-content-end align-items-center gap-2'p l>>"
+            });
+
+            // Move Search Box to Advanced Filter Area
+            $('.dataTables_filter').appendTo('#filter-search-container');
+            $('.dataTables_filter label').contents().filter(function(){ return this.nodeType == 3; }).remove(); // Remove "Search:" text
+            $('.dataTables_filter input').addClass('form-control-sm').attr('placeholder', 'Search Stocks...').css({'width': '150px', 'display': 'inline-block'});
+
+            function formatNumber(num, decimals=2) {
+                if (num === "-" || num === null || num === undefined) return "-";
+                return parseFloat(num).toFixed(decimals);
+            }
+
+            function getColorClass(val) {
+                if (val === "-" || val === null) return "";
+                let v = parseFloat(val);
+                if (v > 0) return "text-success-custom";
+                if (v < 0) return "text-danger-custom";
+                return "";
+            }
+
+            function generateSparkline(data) {
+                if (!data || data.length === 0) return '<div class="text-muted small">-</div>';
+                
+                let maxVal = Math.max(...data);
+                let minVal = Math.min(...data);
+                // Adjust for negative values if any
+                if (minVal > 0) minVal = 0; 
+                
+                let range = maxVal - minVal;
+                if (range === 0) range = 1;
+
+                let html = '<div class="bar-chart">';
+                data.forEach(val => {
+                    let height = 0;
+                    if (val > 0) {
+                         height = ((val - minVal) / range) * 100;
+                    } else {
+                         // Simple handling for now, just show small bar or 0
+                         height = 10; 
+                    }
+                    // normalize height to be between 10% and 100% for visibility
+                    let displayHeight = Math.max(10, (val / maxVal) * 100);
+                    
+                    let isMax = (val === maxVal);
+                    html += `<div class="bar ${isMax ? 'max' : ''}" style="height: ${displayHeight}%;" title="${val.toFixed(2)}"></div>`;
+                });
+                html += '</div>';
+                return html;
+            }
+
+            var stocksData = []; // Store fetched data for modal access
+
+            function loadData() {
+                $('#loading').show();
+                // Disable refresh button
+                $('#refreshBtn').prop('disabled', true);
+                
+                $.ajax({
+                    url: API_BASE ? (API_BASE + '/api/data') : '/api/data',
+                    method: 'GET',
+                    success: function(data) {
+                        stocksData = data; // Cache data
+                        table.clear();
+                        
+                        let totalStocks = 0;
+                        let totalPE = 0;
+                        let peCount = 0;
+                        let totalYield = 0;
+                        let yieldCount = 0;
+                        let totalMktCap = 0;
+
+                        data.forEach(function(stock, index) {
+                            // Metrics calculation
+                            totalStocks++;
+                            if (stock.pe_trailing !== "-" && stock.pe_trailing !== null) {
+                                let pe = parseFloat(stock.pe_trailing);
+                                if (isFinite(pe) && pe > 0) {
+                                    totalPE += pe;
+                                    peCount++;
+                                }
+                            }
+                            if (stock.dividend_yield !== "-" && stock.dividend_yield !== null) {
+                                let dy = parseFloat(stock.dividend_yield);
+                                if (isFinite(dy) && dy > 0) {
+                                    totalYield += dy;
+                                    yieldCount++;
+                                }
+                            }
+                            if (stock.market_cap !== "-" && stock.market_cap !== null) {
+                                let mc = parseFloat(stock.market_cap);
+                                if (isFinite(mc) && mc > 0) {
+                                    totalMktCap += mc;
+                                }
+                            }
+
+                            addStockRow(stock, index);
+                        });
+                        table.draw();
+                        
+                        // Update Summary Cards
+                        $('#total-stocks').text(totalStocks);
+                        $('#avg-pe').text(peCount > 0 ? (totalPE / peCount).toFixed(2) : "0.00");
+                        $('#avg-yield').text(yieldCount > 0 ? (totalYield / yieldCount).toFixed(2) + "%" : "0.00%");
+                        $('#total-mkt-cap').text((totalMktCap / 1000000000000).toFixed(2) + " T"); // Trillion
+                        
+                        $('#summary-section').fadeIn();
+                        $('#loading').hide();
+                        $('#refreshBtn').prop('disabled', false);
+                    },
+                    error: function() {
+                        alert('Error fetching data');
+                        $('#loading').hide();
+                        $('#refreshBtn').prop('disabled', false);
+                    }
+                });
+            }
+
+            // Intercept Add Stock form when using external API base
+            const $addForm = $('form[action="/add"][method="POST"]');
+            if ($addForm.length) {
+                $addForm.on('submit', async function(e) {
+                    if (!API_BASE) {
+                        // Same-origin backend (e.g., Render) → allow normal POST
+                        // Vercel static site (no backend) → prevent and warn
+                        if (ON_VERCEL) {
+                            e.preventDefault();
+                            alert('ไม่พบปลายทาง API สำหรับเพิ่มหุ้น\nโปรดตั้งค่า window.API_BASE ให้ชี้ไปยังโดเมนแบ็กเอนด์');
+                        }
+                        return;
+                    }
+                    e.preventDefault();
+                    const form = this;
+                    try {
+                        const resp = await fetch(API_BASE + '/add', {
+                            method: 'POST',
+                            body: new FormData(form),
+                            credentials: 'include'
+                        });
+                        if (!resp.ok) {
+                            alert('เพิ่มหุ้นไม่สำเร็จ (' + resp.status + ')');
+                            return;
+                        }
+                        // Close modal if open
+                        const modalEl = document.getElementById('settingsModal');
+                        if (modalEl) {
+                            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                            modal.hide();
+                        }
+                        $('#tickerInput').val('');
+                        loadData();
+                    } catch (err) {
+                        alert('เพิ่มหุ้นไม่สำเร็จ');
+                    }
+                });
+            }
+
+            // Intercept Clear All form for external API
+            const $clearForm = $('form[action="/clear_all"][method="POST"]');
+            if ($clearForm.length) {
+                $clearForm.on('submit', async function(e) {
+                    if (!API_BASE) {
+                        // Same-origin backend (e.g., Render) → allow normal POST
+                        // Vercel static site (no backend) → prevent and warn
+                        if (ON_VERCEL) {
+                            e.preventDefault();
+                            alert('ไม่พบปลายทาง API สำหรับลบรายชื่อทั้งหมด\nโปรดตั้งค่า window.API_BASE ให้ชี้ไปยังโดเมนแบ็กเอนด์');
+                            return;
+                        }
+                        return;
+                    }
+                    // respect existing confirm via onsubmit attribute; since we're hijacking, show again
+                    if (!confirm('คุณแน่ใจหรือไม่ที่จะลบรายชื่อหุ้นทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้')) {
+                        e.preventDefault();
+                        return;
+                    }
+                    e.preventDefault();
+                    try {
+                        const resp = await fetch(API_BASE + '/clear_all', {
+                            method: 'POST',
+                            credentials: 'include'
+                        });
+                        if (!resp.ok) {
+                            alert('ลบรายชื่อหุ้นทั้งหมดไม่สำเร็จ (' + resp.status + ')');
+                            return;
+                        }
+                        // Close modal and reload
+                        const modalEl = document.getElementById('settingsModal');
+                        if (modalEl) {
+                            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                            modal.hide();
+                        }
+                        loadData();
+                    } catch (err) {
+                        alert('ลบรายชื่อหุ้นทั้งหมดไม่สำเร็จ');
+                    }
+                });
+            }
+
+            // Delegate remove action for external API
+            $('#stockTable').on('click', 'a[href^="/remove/"]', async function(e) {
+                if (!API_BASE) {
+                    // Same-origin backend (e.g., Render) → allow default navigation
+                    // Vercel static site (no backend) → prevent and warn
+                    if (ON_VERCEL) {
+                        e.preventDefault();
+                        alert('คำสั่งลบหุ้นต้องเรียกผ่านแบ็กเอนด์\nโปรดตั้งค่า window.API_BASE ให้ชี้ไปยังโดเมนแบ็กเอนด์');
+                        return;
+                    }
+                    return;
+                }
+                e.preventDefault();
+                const href = $(this).attr('href'); // /remove/SYMBOL
+                if (!href) return;
+                if (!confirm('คุณแน่ใจหรือไม่ที่จะลบหุ้นตัวนี้?')) return;
+                try {
+                    const resp = await fetch(API_BASE + href, { method: 'GET', credentials: 'include' });
+                    if (!resp.ok) {
+                        alert('ลบหุ้นไม่สำเร็จ (' + resp.status + ')');
+                        return;
+                    }
+                    loadData();
+                } catch (err) {
+                    alert('ลบหุ้นไม่สำเร็จ');
+                }
+            });
+
+            var epsChart = null;
+            var divChart = null;
+
+            // Expose function to global scope
+            window.showStockDetail = function(symbol) {
+                // Find stock data
+                let stock = stocksData.find(s => s.symbol === symbol);
+                if (!stock) return;
+
+                // Populate Text Data
+                $('#modal-symbol').text(stock.symbol);
+                $('#modal-name').text(stock.name);
+                $('#modal-sector').text(stock.details.sector);
+                $('#modal-industry').text(stock.details.industry);
+                $('#modal-price').text(formatNumber(stock.price));
+                $('#modal-desc').text(stock.details.description);
+
+                // Populate Financial Ratios (Dynamic List)
+                let ratios = [
+                    { label: "P/E (ปัจจุบัน)", value: stock.pe_trailing },
+                    { label: "P/E (คาดการณ์)", value: stock.pe_forward },
+                    { label: "P/BV", value: stock.details.price_to_book },
+                    { label: "ROE", value: stock.details.roe },
+                    { label: "ROA", value: stock.details.roa },
+                    { label: "D/E Ratio", value: stock.details.debt_to_equity },
+                    { label: "Dividend Yield", value: stock.dividend_yield },
+                    { label: "Dividend Rate", value: stock.dividend_rate },
+                    { label: "Target Price", value: stock.target_price },
+                    { label: "PEG Ratio", value: stock.peg },
+                    { label: "DDM Value", value: stock.ddm_value },
+                    { label: "DDM Discount Rate (k)", value: stock.ddm_k ? stock.ddm_k + "%" : "-" },
+                    { label: "Market Cap (B)", value: (stock.market_cap / 1000000000).toFixed(2) },
+                    { label: "Net Margin", value: stock.details.profit_margin },
+                    { label: "Gross Margin", value: stock.details.gross_margin },
+                    { label: "Operating Margin", value: stock.details.operating_margin },
+                    { label: "Revenue Growth", value: stock.revenue_growth },
+                    { label: "Earnings Growth", value: stock.ebitda_growth },
+                    { label: "Current Ratio", value: stock.details.current_ratio },
+                    { label: "Quick Ratio", value: stock.details.quick_ratio },
+                    { label: "Book Value", value: stock.details.book_value },
+                    { label: "Beta", value: stock.beta },
+                    { label: "52W High", value: stock.high_52 },
+                    { label: "52W Low", value: stock.low_52 }
+                ];
+
+                let ratioHtml = "";
+                ratios.forEach(r => {
+                    let val = r.value;
+                    
+                    // Special handling for pre-formatted or raw values
+                    if (r.label === "Market Cap (B)") {
+                         // Already formatted above
+                         val = formatNumber(val);
+                    } else if (r.label === "Revenue Growth" || r.label === "Earnings Growth") {
+                         val = formatNumber(r.value);
+                         if (val !== "-") val += "%";
+                    } else {
+                         val = formatNumber(r.value);
+                    }
+
+                    if (r.label.includes("Margin") || r.label.includes("ROE") || r.label.includes("ROA")) {
+                         // Convert decimal to % if needed
+                         if (r.value && Math.abs(r.value) < 1) val = (r.value * 100).toFixed(2) + "%";
+                    }
+                    if (r.label === "Dividend Yield" && val !== "-") val += "%";
+
+                    ratioHtml += `
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 border rounded bg-light h-100">
+                                <div class="detail-label">${r.label}</div>
+                                <div class="detail-value text-break">${val}</div>
+                            </div>
+                        </div>`;
+                });
+                $('#financial-ratios').html(ratioHtml);
+
+                // Render Charts
+                let currentYear = new Date().getFullYear();
+                
+                // 1. EPS Chart
+                if (epsChart) epsChart.destroy();
+                let epsLabels = [];
+                let epsData = [];
+                
+                // eps_trend is aligned to [currentYear-5, ..., currentYear-1]
+                // years_eps = [current_year - 5, current_year - 4, current_year - 3, current_year - 2, current_year - 1]
+                for (let i = 0; i < 5; i++) {
+                    epsLabels.push(currentYear - 5 + i);
+                }
+                
+                // If stock.eps_trend is missing or partial, fill with null
+                if (stock.eps_trend) {
+                     epsData = stock.eps_trend;
+                } else {
+                     epsData = [null, null, null, null, null];
+                }
+
+                const ctxEps = document.getElementById('epsChart').getContext('2d');
+                epsChart = new Chart(ctxEps, {
+                    type: 'bar',
+                    data: {
+                        labels: epsLabels,
+                        datasets: [{
+                            label: 'EPS (บาท)',
+                            data: epsData,
+                            backgroundColor: 'rgba(25, 135, 84, 0.6)',
+                            borderColor: 'rgba(25, 135, 84, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: { beginAtZero: false }
+                        }
+                    }
+                });
+
+                // 2. Dividend Chart
+                if (divChart) divChart.destroy();
+                let divLabels = [];
+                let divData = [];
+                
+                // div_trend is aligned to [currentYear-10, ..., currentYear-1]
+                for (let i = 0; i < 10; i++) {
+                    divLabels.push(currentYear - 10 + i);
+                }
+                
+                if (stock.div_trend) {
+                    divData = stock.div_trend;
+                } else {
+                    divData = Array(10).fill(null);
+                }
+
+                const ctxDiv = document.getElementById('divChart').getContext('2d');
+                divChart = new Chart(ctxDiv, {
+                    type: 'bar',
+                    data: {
+                        labels: divLabels,
+                        datasets: [{
+                            label: 'ปันผล (บาท)',
+                            data: divData,
+                            backgroundColor: 'rgba(13, 110, 253, 0.6)',
+                            borderColor: 'rgba(13, 110, 253, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+
+                // Show Modal
+                var myModal = new bootstrap.Modal(document.getElementById('stockModal'));
+                myModal.show();
+            };
+
+            // Filter Growth Stocks Function
+            function filterGrowthStocks() {
+                if (!stocksData || stocksData.length === 0) return;
+                
+                // Filter criteria:
+                // 1. EPS Trend is growing (last year > first year in 5Y trend)
+                // 2. Dividend Trend is growing (last year > first year in 10Y trend or generally positive)
+                // Let's use a simple slope check or compare start vs end
+                
+                let growthStocks = stocksData.filter(stock => {
+                    let isEpsGrowing = false;
+                    if (stock.eps_trend && stock.eps_trend.length >= 2) {
+                        let len = stock.eps_trend.length;
+                        let latest = stock.eps_trend[len - 1];
+                        let prev = stock.eps_trend[len - 2];
+                        let first = stock.eps_trend[0];
+                        
+                        // Condition: Long term growth AND Recent growth (not declining)
+                        if (latest > first && latest >= prev) {
+                             isEpsGrowing = true;
+                        }
+                    }
+
+                    let isDivGrowing = false;
+                    if (stock.div_trend && stock.div_trend.length >= 2) {
+                        let len = stock.div_trend.length;
+                        let latest = stock.div_trend[len - 1];
+                        let prev = stock.div_trend[len - 2];
+                        let first = stock.div_trend[0];
+                        
+                        // Condition: Long term growth AND Recent growth (not declining significantly)
+                        // Allow flat dividend but trend should be up
+                        if (latest >= first && latest >= prev) {
+                             isDivGrowing = true;
+                        }
+                    }
+                    
+                    return isEpsGrowing && isDivGrowing;
+                });
+                
+                if (growthStocks.length === 0) {
+                    alert("ไม่พบหุ้นที่มีแนวโน้มเติบโตทั้งกำไรและปันผลในช่วงนี้");
+                    return;
+                }
+
+                // Update Table with filtered data
+                table.clear();
+                growthStocks.forEach(function(stock, index) {
+                    // ... (duplicate row adding logic, should refactor)
+                    // Refactoring row adding to a helper function
+                    addStockRow(stock, index);
+                });
+                table.draw();
+                
+                // Change button state
+                $('#filterGrowthBtn').html('<i class="bi bi-list-ul"></i> แสดงทั้งหมด');
+                $('#filterGrowthBtn').removeClass('btn-primary').addClass('btn-secondary');
+                $('#filterGrowthBtn').off('click').click(resetFilter);
+
+                // Reset other buttons
+                resetOtherButtons('growth');
+            }
+
+            // Filter Dividend Growth Stocks Function (10 Years Overall Trend)
+            function filterDivGrowthStocks() {
+                if (!stocksData || stocksData.length === 0) return;
+                
+                let divGrowthStocks = stocksData.filter(stock => {
+                    if (stock.div_trend && stock.div_trend.length >= 5) {
+                        let trend = stock.div_trend;
+                        let len = trend.length;
+                        
+                        // Refined Logic based on user feedback (avoid declining trend at the end)
+                        
+                        // 1. Long-term Growth: Latest Year > First Year (or 5 years ago)
+                        let latest = trend[len-1];
+                        let first = trend[0];
+                        let mid = trend[Math.floor(len/2)];
+                        
+                        if (latest <= first) return false; // Must be higher than start
+                        
+                        // 2. Recent Stability/Growth: 
+                        // The average of the last 3 years should not be significantly lower than the previous 3 years
+                        // OR simply, Latest year should not be the lowest in the last 3-5 years if it was high before.
+                        
+                        // User mentioned stocks like DOHOME, CHG, CBG, etc. where they might have peaked and are now going down.
+                        // Example BANPU: 0.6 -> ... -> 1.0 -> 0.38 -> 0.24 (Declining recently)
+                        
+                        // Check recent trend (Last 3 years)
+                        // If 2023 > 2024 > 2025 (Declining), maybe exclude?
+                        // Let's enforce that Latest Year >= Average of Last 3 Years (roughly) OR Latest >= Previous Year
+                        
+                        // Let's use a stricter rule:
+                        // - Latest > First
+                        // - Latest > 5-Year Ago (mid point)
+                        // - Trend slope of last 3 years shouldn't be strongly negative
+                        
+                        // Calculate Slope of last 3 points
+                        if (len >= 3) {
+                            let y3 = trend[len-3];
+                            let y2 = trend[len-2];
+                            let y1 = trend[len-1]; // Latest
+                            
+                            // If strictly declining for 2 years straight (y3 > y2 > y1), exclude
+                            if (y3 > y2 && y2 > y1) return false;
+                        }
+                        
+                        return true;
+                    }
+                    return false;
+                });
+                
+                if (divGrowthStocks.length === 0) {
+                    alert("ไม่พบหุ้นที่มีแนวโน้มปันผลเติบโตในช่วงนี้");
+                    return;
+                }
+
+                // Update Table
+                table.clear();
+                divGrowthStocks.forEach(function(stock, index) {
+                    addStockRow(stock, index);
+                });
+                table.draw();
+                
+                // Change button state
+                $('#filterDivGrowthBtn').html('<i class="bi bi-list-ul"></i> แสดงทั้งหมด');
+                $('#filterDivGrowthBtn').removeClass('btn-info').addClass('btn-secondary');
+                $('#filterDivGrowthBtn').off('click').click(resetFilter);
+                
+                // Reset other buttons
+                resetOtherButtons('divGrowth');
+            }
+
+            // Filter Undervalued Stocks Function (Price < DDM)
+            function filterUndervaluedStocks() {
+                if (!stocksData || stocksData.length === 0) return;
+                
+                let undervaluedStocks = stocksData.filter(stock => {
+                    let price = parseFloat(stock.price);
+                    let ddm = parseFloat(stock.ddm_value);
+                    
+                    if (!isNaN(price) && !isNaN(ddm) && price > 0 && ddm > 0) {
+                        return price < ddm;
+                    }
+                    return false;
+                });
+                
+                if (undervaluedStocks.length === 0) {
+                    alert("ไม่พบหุ้นที่ราคาต่ำกว่า DDM ในขณะนี้");
+                    return;
+                }
+
+                // Update Table
+                table.clear();
+                undervaluedStocks.forEach(function(stock, index) {
+                    addStockRow(stock, index);
+                });
+                table.draw();
+                
+                // Change button state
+                $('#filterUndervaluedBtn').html('<i class="bi bi-list-ul"></i> แสดงทั้งหมด');
+                $('#filterUndervaluedBtn').removeClass('btn-warning').addClass('btn-secondary');
+                $('#filterUndervaluedBtn').off('click').click(resetFilter);
+                
+                // Reset other buttons
+                resetOtherButtons('undervalued');
+            }
+
+            // Filter Grade A Stocks (Guru Screen)
+            function filterGradeAStocks() {
+                if (!stocksData || stocksData.length === 0) return;
+                
+                let gradeAStocks = stocksData.filter(stock => {
+                    return stock.grade === "A";
+                });
+                
+                if (gradeAStocks.length === 0) {
+                    alert("ไม่พบหุ้นเกรด A ในรายการปัจจุบัน");
+                    return;
+                }
+
+                // Update Table
+                table.clear();
+                gradeAStocks.forEach(function(stock, index) {
+                    addStockRow(stock, index);
+                });
+                table.draw();
+                
+                // Change button state
+                $('#filterGradeABtn').html('<i class="bi bi-list-ul"></i> แสดงทั้งหมด');
+                $('#filterGradeABtn').removeClass('btn-success').addClass('btn-secondary');
+                $('#filterGradeABtn').off('click').click(resetFilter);
+                
+                resetOtherButtons('gradeA');
+            }
+
+            // Advanced Filter Function
+            function applyAdvancedFilter() {
+                if (!stocksData || stocksData.length === 0) return;
+                
+                let criteria = {
+                    pe: parseFloat($('#filter-pe').val()),
+                    pbv: parseFloat($('#filter-pbv').val()),
+                    de: parseFloat($('#filter-de').val()),
+                    roa: parseFloat($('#filter-roa').val()),
+                    roe: parseFloat($('#filter-roe').val()),
+                    yield: parseFloat($('#filter-yield').val()),
+                    mcap: parseFloat($('#filter-mcap').val())
+                };
+                
+                let filteredStocks = stocksData.filter(stock => {
+                    let pass = true;
+                    
+                    // P/E < X
+                    if (!isNaN(criteria.pe)) {
+                        let val = parseFloat(stock.pe_trailing);
+                        if (isNaN(val) || val <= 0 || val >= criteria.pe) pass = false;
+                    }
+                    
+                    // P/BV < X
+                    if (pass && !isNaN(criteria.pbv)) {
+                        let val = parseFloat(stock.details.price_to_book);
+                        if (isNaN(val) || val >= criteria.pbv) pass = false;
+                    }
+                    
+                    // D/E < X
+                    if (pass && !isNaN(criteria.de)) {
+                        let val = parseFloat(stock.details.debt_to_equity);
+                        if (isNaN(val) || val >= criteria.de) pass = false;
+                    }
+                    
+                    // ROA > X
+                    if (pass && !isNaN(criteria.roa)) {
+                        let val = parseFloat(stock.details.roa); // usually decimal like 0.05
+                        if (isNaN(val) || (val * 100) <= criteria.roa) pass = false;
+                    }
+                    
+                    // ROE > X
+                    if (pass && !isNaN(criteria.roe)) {
+                        let val = parseFloat(stock.details.roe);
+                        if (isNaN(val) || (val * 100) <= criteria.roe) pass = false;
+                    }
+                    
+                    // Yield > X
+                    if (pass && !isNaN(criteria.yield)) {
+                        let val = parseFloat(stock.dividend_yield); // usually like 5.5
+                        if (isNaN(val) || val <= criteria.yield) pass = false;
+                    }
+                    
+                    // Market Cap > X (Millions)
+                    if (pass && !isNaN(criteria.mcap)) {
+                        let val = parseFloat(stock.market_cap);
+                        if (isNaN(val) || (val / 1000000) <= criteria.mcap) pass = false;
+                    }
+                    
+                    return pass;
+                });
+                
+                if (filteredStocks.length === 0) {
+                    alert("ไม่พบหุ้นที่ตรงตามเงื่อนไข");
+                    return;
+                }
+                
+                // Update Table
+                table.clear();
+                filteredStocks.forEach(function(stock, index) {
+                    addStockRow(stock, index);
+                });
+                table.draw();
+                
+                resetOtherButtons('advanced');
+            }
+            
+            function clearAdvancedFilter() {
+                $('#filter-pe').val('');
+                $('#filter-pbv').val('');
+                $('#filter-de').val('');
+                $('#filter-roa').val('');
+                $('#filter-roe').val('');
+                $('#filter-yield').val('');
+                $('#filter-mcap').val('');
+                resetFilter();
+            }
+
+            function resetOtherButtons(activeFilter) {
+                if (activeFilter !== 'growth') {
+                     if ($('#filterGrowthBtn').hasClass('btn-secondary')) {
+                         $('#filterGrowthBtn').html('<i class="bi bi-graph-up"></i> คัดกรองหุ้นเติบโต');
+                         $('#filterGrowthBtn').removeClass('btn-secondary').addClass('btn-primary');
+                         $('#filterGrowthBtn').off('click').click(filterGrowthStocks);
+                     }
+                }
+                if (activeFilter !== 'divGrowth') {
+                     if ($('#filterDivGrowthBtn').hasClass('btn-secondary')) {
+                         $('#filterDivGrowthBtn').html('<i class="bi bi-piggy-bank"></i> คัดหุ้นปันผลเติบโต (10Y)');
+                         $('#filterDivGrowthBtn').removeClass('btn-secondary').addClass('btn-info');
+                         $('#filterDivGrowthBtn').off('click').click(filterDivGrowthStocks);
+                     }
+                }
+                if (activeFilter !== 'undervalued') {
+                     if ($('#filterUndervaluedBtn').hasClass('btn-secondary')) {
+                         $('#filterUndervaluedBtn').html('<i class="bi bi-currency-dollar"></i> คัดราคา < DDM');
+                         $('#filterUndervaluedBtn').removeClass('btn-secondary').addClass('btn-warning');
+                         $('#filterUndervaluedBtn').off('click').click(filterUndervaluedStocks);
+                     }
+                }
+                if (activeFilter !== 'gradeA') {
+                     if ($('#filterGradeABtn').hasClass('btn-secondary')) {
+                         $('#filterGradeABtn').html('<i class="bi bi-star-fill"></i> คัดหุ้นเกรด A (Guru)');
+                         $('#filterGradeABtn').removeClass('btn-secondary').addClass('btn-success');
+                         $('#filterGradeABtn').off('click').click(filterGradeAStocks);
+                     }
+                }
+                if (activeFilter !== 'sniper') {
+                     if ($('#filterSniperBtn').hasClass('btn-secondary')) {
+                         $('#filterSniperBtn').html('<i class="bi bi-crosshair"></i> Sniper Mode (Superhuman)');
+                         $('#filterSniperBtn').removeClass('btn-secondary').addClass('btn-danger');
+                         $('#filterSniperBtn').off('click').click(filterSniperStocks);
+                     }
+                }
+            }
+
+            function resetFilter() {
+                table.clear();
+                stocksData.forEach((stock, index) => {
+                    addStockRow(stock, index);
+                });
+                table.draw();
+                
+                resetOtherButtons('none');
+            }
+
+            // Filter Sniper Mode (Superhuman)
+            function filterSniperStocks() {
+                if (!stocksData || stocksData.length === 0) return;
+                
+                // Criteria: Grade A (Score >= 7) + MOS > 10% + RSI < 50
+                let sniperStocks = stocksData.filter(stock => {
+                    let score = stock.score !== undefined ? stock.score : 0;
+                    let mos = parseFloat(stock.mos);
+                    let rsi = parseFloat(stock.rsi);
+                    
+                    let isGradeA = score >= 6; // Relax to >= 6 (Grade A cutoff)
+                    let isSafe = !isNaN(mos) && mos > 10;
+                    let isCheap = !isNaN(rsi) && rsi < 50; 
+                    
+                    return isGradeA && isSafe && isCheap;
+                });
+                
+                if (sniperStocks.length === 0) {
+                    alert("ไม่พบหุ้น 'Sniper Mode' (Grade A + MOS > 10% + RSI < 50) ในขณะนี้");
+                    return;
+                }
+
+                // Update Table
+                table.clear();
+                sniperStocks.forEach(function(stock, index) {
+                    addStockRow(stock, index);
+                });
+                table.draw();
+                
+                // Change button state
+                $('#filterSniperBtn').html('<i class="bi bi-list-ul"></i> แสดงทั้งหมด');
+                $('#filterSniperBtn').removeClass('btn-danger').addClass('btn-secondary');
+                $('#filterSniperBtn').off('click').click(resetFilter);
+                
+                resetOtherButtons('sniper');
+            }
+
+            function addStockRow(stock, index) {
+                // Metrics calculation (can be skipped for display only, or recalculated if needed for summary)
+                // For now, just display logic
+                
+                // Format numbers
+                let marketCap = (stock.market_cap / 1000000000).toFixed(2); // Billions
+                let divYield = formatNumber(stock.dividend_yield);
+                let divRate = formatNumber(stock.dividend_rate);
+                let revGrowth = formatNumber(stock.revenue_growth);
+                let earnGrowth = formatNumber(stock.ebitda_growth);
+                let price = formatNumber(stock.price);
+                let peTrailing = formatNumber(stock.pe_trailing);
+                let peForward = formatNumber(stock.pe_forward);
+                let pbv = formatNumber(stock.details.price_to_book);
+                let de = formatNumber(stock.details.debt_to_equity);
+                let roa = stock.details.roa ? formatNumber(stock.details.roa * 100) : "-";
+                let roe = stock.details.roe ? formatNumber(stock.details.roe * 100) : "-";
+                let beta = formatNumber(stock.beta);
+                let high52 = formatNumber(stock.high_52);
+                let low52 = formatNumber(stock.low_52);
+                let bvps = formatNumber(stock.bvps);
+
+                // Score Badge
+                let score = stock.score !== undefined ? stock.score : 0;
+                let grade = stock.grade !== undefined ? stock.grade : "D";
+                let scoreColor = "secondary";
+                if (grade === "A") scoreColor = "success";
+                else if (grade === "B") scoreColor = "info";
+                else if (grade === "C") scoreColor = "warning";
+                
+                let scoreDetails = stock.score_details ? stock.score_details.join("\n") : "";
+                let scoreHtml = `<span class="badge bg-${scoreColor}" title="${scoreDetails}" style="cursor:help; font-size:0.9rem;">${score}/9 (${grade})</span>`;
+
+                let epsTrendChart = "";
+                if (stock.eps_trend && stock.eps_trend.length > 0) {
+                    epsTrendChart = `<div style="display:flex; align-items:flex-end; justify-content:flex-end; height:30px; gap:2px;">`;
+                    // Filter out nulls for max calculation
+                    let validEps = stock.eps_trend.filter(x => x !== null);
+                    let maxEps = validEps.length > 0 ? Math.max(...validEps) : 0;
+                    
+                    let currentYear = new Date().getFullYear();
+                    let len = stock.eps_trend.length;
+                    
+                    stock.eps_trend.forEach((val, i) => {
+                        // Calculate Year for Tooltip
+                        // Current setup: data ends at currentYear - 1
+                        // If len=5, i=4 (last one) -> year = currentYear - 1
+                        let year = (currentYear - 1) - (len - 1 - i);
+
+                        if (val === null) {
+                            epsTrendChart += `<div style="width:6px; height:1px; background-color:#f1f3f5;" title="ปี ${year}: -"></div>`;
+                            return;
+                        }
+
+                        let h = 0;
+                        let color = "#adb5bd"; // default gray
+                        
+                        if (maxEps > 0) {
+                            h = (val / maxEps) * 100;
+                        } else {
+                            // All negative or zero or max is 0
+                            // If val is negative, show small bar
+                            h = 10; 
+                        }
+                        
+                        if (val < 0) {
+                            h = 10; // Minimum visibility for negative
+                            color = "#dc3545"; // Red for negative
+                        } else if (val > 0 && val === maxEps) {
+                            color = "#198754"; // Green for max
+                        }
+                        
+                        if (h < 10) h = 10; // Min height
+                        
+                        epsTrendChart += `<div style="width:6px; height:${h}%; background-color:${color}; border-radius:1px;" title="ปี ${year}: ${val.toFixed(2)}"></div>`;
+                    });
+                    epsTrendChart += `</div>`;
+                } else {
+                    epsTrendChart = `<span class="text-muted">-</span>`;
+                }
+
+                let divTrendChart = "";
+                if (stock.div_trend && stock.div_trend.length > 0) {
+                    // Check if recent years have any dividend
+                    // If the sum of dividends is 0, don't show chart
+                    let sumDiv = stock.div_trend.reduce((a, b) => a + b, 0);
+                    
+                    if (sumDiv > 0) {
+                         divTrendChart = `<div style="display:flex; align-items:flex-end; justify-content:flex-end; height:30px; gap:2px;">`;
+                         let maxDiv = Math.max(...stock.div_trend);
+                         let currentYear = new Date().getFullYear();
+                         let len = stock.div_trend.length;
+
+                         stock.div_trend.forEach((val, i) => {
+                             let h = maxDiv > 0 ? (val / maxDiv * 100) : 0; 
+                             
+                             let color = "#adb5bd";
+                             if (val === 0) {
+                                 h = 0; // No bar for 0
+                             } else {
+                                 if (h < 10) h = 10;
+                                 if (val === maxDiv) color = "#198754";
+                             }
+                             
+                             // Calculate Year for Tooltip
+                             // Current setup: data ends at currentYear - 1
+                             let year = (currentYear - 1) - (len - 1 - i);
+
+                             if (h > 0) {
+                                divTrendChart += `<div style="width:6px; height:${h}%; background-color:${color}; border-radius:1px;" title="ปี ${year}: ${val.toFixed(2)}"></div>`;
+                             } else {
+                                divTrendChart += `<div style="width:6px; height:1px; background-color:#e9ecef;" title="ปี ${year}: 0.00"></div>`; // Placeholder for 0
+                             }
+                         });
+                         divTrendChart += `</div>`;
+                    } else {
+                        divTrendChart = `<span class="text-muted">-</span>`;
+                    }
+                } else { divTrendChart = `<span class="text-muted">-</span>`; }
+
+                let ddmValue = formatNumber(stock.ddm_value);
+                let kPercent = stock.ddm_k ? stock.ddm_k : 10;
+                let targetPrice = formatNumber(stock.target_price);
+
+                // RSI Badge
+                let rsi = stock.rsi !== undefined ? stock.rsi : "-";
+                let rsiHtml = `<span class="text-muted">-</span>`;
+                if (rsi !== "-") {
+                    let rsiVal = parseFloat(rsi);
+                    if (rsiVal < 30) rsiHtml = `<span class="badge bg-success" title="Oversold">${rsi}</span>`;
+                    else if (rsiVal < 50) rsiHtml = `<span class="text-success fw-bold">${rsi}</span>`;
+                    else if (rsiVal > 70) rsiHtml = `<span class="badge bg-danger" title="Overbought">${rsi}</span>`;
+                    else rsiHtml = `<span>${rsi}</span>`;
+                }
+
+                // MOS Badge
+                let mos = stock.mos !== undefined ? stock.mos : "-";
+                let mosHtml = `<span class="text-muted">-</span>`;
+                if (mos !== "-") {
+                    let mosVal = parseFloat(mos);
+                    if (mosVal > 20) mosHtml = `<span class="badge bg-success">+${mos}%</span>`;
+                    else if (mosVal > 0) mosHtml = `<span class="text-success fw-bold">+${mos}%</span>`;
+                    else mosHtml = `<span class="text-danger">${mos}%</span>`;
+                }
+                
+                // Determine row highlight
+                let priceStyle = "";
+                let pVal = parseFloat(stock.price);
+                let ddmVal = parseFloat(stock.ddm_value);
+                
+                if (!isNaN(pVal) && !isNaN(ddmVal) && pVal < ddmVal) {
+                    priceStyle = "background-color: #d1e7dd; font-weight: bold; color: #0f5132;";
+                }
+
+                table.row.add([
+                    index + 1,
+                    `<span class="stock-link" data-symbol="${stock.symbol}" onclick="showStockDetail('${stock.symbol}')">${stock.symbol}</span>`,
+                    epsTrendChart,
+                    divTrendChart,
+                    `<span style="${priceStyle}">${price}</span>`,
+                    peTrailing,
+                    peForward,
+                    pbv,
+                    de,
+                    roa,
+                    roe,
+                    marketCap,
+                    `<span class="${getColorClass(divYield)}">${divYield}</span>`,
+                    divRate,
+                    `<span class="fw-bold text-primary" title="Dynamic DDM (k: ${kPercent}%)">${ddmValue}</span>`,
+                    targetPrice,
+                    rsiHtml,
+                    mosHtml,
+                    beta,
+                    high52,
+                    low52,
+                    bvps,
+                    `<span class="${getColorClass(revGrowth)}">${revGrowth}</span>`,
+                    `<span class="${getColorClass(earnGrowth)}">${earnGrowth}</span>`,
+                    scoreHtml,
+                    `<a href="/remove/${stock.symbol}" class="btn btn-outline-danger btn-sm" onclick="return confirm('คุณแน่ใจหรือไม่ที่จะลบหุ้นตัวนี้?')"><i class="bi bi-trash"></i></a>`
+                ]);
+            }
+
+            $('#filterGrowthBtn').click(filterGrowthStocks);
+            $('#filterDivGrowthBtn').click(filterDivGrowthStocks);
+            $('#filterUndervaluedBtn').click(filterUndervaluedStocks);
+            $('#filterGradeABtn').click(filterGradeAStocks);
+            $('#filterSniperBtn').click(filterSniperStocks);
+            $('#applyAdvancedFilter').click(applyAdvancedFilter);
+            $('#resetAdvancedFilter').click(clearAdvancedFilter);
+
+            // Initial load
+            loadData();
+
+            $('#refreshBtn').click(function() {
+                loadData();
+            });
+        });
+    </script>
+</body>
+</html>
